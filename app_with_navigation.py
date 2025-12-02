@@ -25,6 +25,22 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-m
 warnings.filterwarnings('ignore', message='ensure_column skipped for MongoDB')
 db.init_app(app)
 
+# Helper to decide if the current request expects JSON
+def wants_json_response():
+    try:
+        accept = request.headers.get('Accept', '') or ''
+        xrw = (request.headers.get('X-Requested-With') == 'XMLHttpRequest')
+        is_json_req = bool(getattr(request, 'is_json', False))
+        method_is_api = request.method in ('POST', 'PUT', 'PATCH', 'DELETE')
+        # Common GET JSON endpoints in this app
+        json_get_paths = (
+            request.path.startswith('/timetable/entries') or
+            request.path.startswith('/timetable/diagnostics')
+        )
+        return xrw or is_json_req or ('application/json' in accept) or method_is_api or json_get_paths
+    except Exception:
+        return False
+
 def time_to_minutes(time_str):
     """Convert time string (HH:MM) to minutes since midnight"""
     h, m = map(int, time_str.split(':'))
@@ -364,8 +380,8 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
-            # If the caller expects JSON (XHR), return JSON error instead of redirect
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+            # If the caller expects JSON (API/fetch), return JSON error instead of redirect
+            if wants_json_response():
                 return jsonify({'success': False, 'error': 'Authentication required'}), 401
             return redirect(url_for('login'))
         return f(*args, **kwargs)
@@ -375,14 +391,14 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
-            # If the caller expects JSON (XHR), return JSON error instead of redirect
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+            # If the caller expects JSON (API/fetch), return JSON error instead of redirect
+            if wants_json_response():
                 return jsonify({'success': False, 'error': 'Authentication required'}), 401
             return redirect(url_for('login'))
         user = User.query.get(session['user_id'])
         if not user or user.role != 'admin':
-            # For XHR/JSON callers return JSON error; otherwise flash and redirect.
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+            # For API callers return JSON error; otherwise flash and redirect.
+            if wants_json_response():
                 return jsonify({'success': False, 'error': 'Access denied. Admin privileges required.'}), 403
             flash('Access denied. Admin privileges required.', 'danger')
             return redirect(url_for('index'))
@@ -1489,7 +1505,11 @@ def generate_timetable():
     db.session.commit()
     
     # Generate new timetable
-    generator = TimetableGenerator(db)
+    # Optional best-effort mode: when requested, attempt partial schedule
+    best_effort = (request.args.get('best_effort') or '').strip() in ('1', 'true', 'yes')
+    generator = TimetableGenerator(db, config={
+        'allow_infeasible_best_effort': best_effort
+    })
     result = generator.generate()
     
     if result['success']:
@@ -1502,7 +1522,8 @@ def generate_timetable():
         return jsonify({
             'success': False,
             'message': result.get('error', 'Failed to generate timetable'),
-            'warnings': result.get('warnings', [])
+            'warnings': result.get('warnings', []),
+            'stats': result.get('stats', {})
         })
 
 
@@ -1646,6 +1667,20 @@ def clear_timetable():
     TimetableEntry.query.delete()
     db.session.commit()
     return jsonify({'success': True})
+
+# Diagnostics endpoint to help identify infeasibility causes
+@app.route('/timetable/diagnostics', methods=['GET'])
+@admin_required
+def timetable_diagnostics():
+    generator = TimetableGenerator(db)
+    context = generator._load_context()
+    report = generator._run_bound_analyzer(context)
+    return jsonify({
+        'success': True,
+        'feasible': report.get('feasible', False),
+        'warnings': report.get('warnings', []),
+        'stats': report.get('stats', {})
+    })
 
 # Export
 # Settings Management
