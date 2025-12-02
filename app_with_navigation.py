@@ -268,12 +268,19 @@ def generate_time_slots():
     
     db.session.commit()
 
+from flask import Flask
+
 app = Flask(__name__)
+
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///timetable.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['MONGO_URI'] = 'mongodb://localhost:27017'
+
+# 🔹 Use your Atlas URI here instead of localhost
+app.config['MONGO_URI'] = "mongodb+srv://Aditya:Aditya%40212005@cluster0.sndj6yw.mongodb.net/timetable?appName=Cluster0"
+
 app.config['MONGO_DBNAME'] = 'timetable'
 app.config['SECRET_KEY'] = 'your-secret-key-change-this-in-production'
+
 # Initialize our MongoDB-backed db compatibility layer
 db.init_app(app)
 
