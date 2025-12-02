@@ -18,11 +18,12 @@ from flask import Flask
 app = Flask(__name__)
 
 # Read from environment variables (Render will set these)
-app.config['MONGO_URI'] = os.environ.get('MONGO_URI')
+app.config['MONGO_URI'] = os.environ.get('MONGO_URI') or 'mongodb://localhost:27017'
 app.config['MONGO_DBNAME'] = os.environ.get('MONGO_DBNAME', 'timetable')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-me')
 # Suppress MongoDB schema migration warnings
 warnings.filterwarnings('ignore', message='ensure_column skipped for MongoDB')
+db.init_app(app)
 
 def time_to_minutes(time_str):
     """Convert time string (HH:MM) to minutes since midnight"""
@@ -268,21 +269,7 @@ def generate_time_slots():
     
     db.session.commit()
 
-from flask import Flask
-
-app = Flask(__name__)
-
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///timetable.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# 🔹 Use your Atlas URI here instead of localhost
-app.config['MONGO_URI'] = "mongodb+srv://Aditya:Aditya%40212005@cluster0.sndj6yw.mongodb.net/timetable?appName=Cluster0"
-
-app.config['MONGO_DBNAME'] = 'timetable'
-app.config['SECRET_KEY'] = 'your-secret-key-change-this-in-production'
-
-# Initialize our MongoDB-backed db compatibility layer
-db.init_app(app)
+# (Removed duplicate Flask app initialization and hardcoded Mongo settings)
 
 # Inject `next_page` into all templates based on a fixed navigation order.
 @app.context_processor
