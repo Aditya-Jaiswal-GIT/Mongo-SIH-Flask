@@ -405,6 +405,37 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# Consistent JSON error responses for API/fetch callers
+@app.errorhandler(400)
+def handle_400(e):
+    if wants_json_response():
+        return jsonify({'success': False, 'error': 'Bad Request', 'detail': str(e)}), 400
+    return ("Bad Request", 400)
+
+@app.errorhandler(401)
+def handle_401(e):
+    if wants_json_response():
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+    return ("Unauthorized", 401)
+
+@app.errorhandler(403)
+def handle_403(e):
+    if wants_json_response():
+        return jsonify({'success': False, 'error': 'Forbidden'}), 403
+    return ("Forbidden", 403)
+
+@app.errorhandler(404)
+def handle_404(e):
+    if wants_json_response():
+        return jsonify({'success': False, 'error': 'Not Found'}), 404
+    return ("Not Found", 404)
+
+@app.errorhandler(500)
+def handle_500(e):
+    if wants_json_response():
+        return jsonify({'success': False, 'error': 'Server Error'}), 500
+    return ("Server Error", 500)
+
 # Authentication Routes
 @app.route('/login', methods=['GET', 'POST'])
 def login():
